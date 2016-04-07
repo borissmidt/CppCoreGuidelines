@@ -6806,40 +6806,114 @@ Union rule summary:
 * [C.182: Use anonymous `union`s to implement tagged unions](#Ru-anonymous)
 * ???
 
-### <a name="Ru-union"></a>C.180: Use `union`s to ???
+### <a name="Ru-union"></a>C.180: Use `union`s to reuse static memory
 
 ??? When should unions be used, if at all? What's a good future-proof way to re-interpret object representations of PODs?
 ??? variant
+Unions share a single memory location for different multiple variables. 
+The union is only recommended as a last resort since it completely avoids the type system.
 
 ##### Reason
 
- ???
+Only use it when you have a limited system like an embedded chip like an 8bit processor.
+This can be useful for sharing a buffer for a send and receive buffer.
+But when you move to a larger chip then you can easily split the buffer into a struct with 
+two separate arrays without changing code.
 
 ##### Example
 
-    ???
+union Buffer{
+    uint8_t tx[128];
+    uint8_t rx[128];
+}
 
+static union Buffer buffer;
+
+void receive(){
+    uint8_t i =0;
+    while (i <  128)
+    {
+        //some receive functionality
+        buffer.rx[i]= uart_receive();
+        if (i== packet_length)
+            break;
+    }
+}
+void send (){
+    uint8_t i =0;
+    uint8_t send_count = buffer.tx[i];
+    while (i++ < send_count)
+    {
+        //some receive functionality
+        uart_send(buffer.tx[i]);
+
+    }
+}
 ##### Enforcement
 
-???
 
 ### <a name="Ru-naked"></a>C.181: Avoid "naked" `union`s
-
 ##### Reason
-
-Naked unions are a source of type errors.
-
+A naked union allows for type punning this avoids the type system completely which causes runtime errors.
 **Alternative**: Wrap them in a class together with a type field.
 
 **Alternative**: Use `variant`.
 
+Type punning can sometimes be useful on a limited system. 
+Because it allows you to access an array as if it was a structure or access an primitive type as an array. 
+You could for example avoid a copy from an I/O buffer by type punning it with an packed struct which represents 
+the layout of the message. 
+
+The union is required since casting between pointer types is undefined behaviour. 
+
 ##### Example
 
-    ???
+union PixelColor{ 
+    uint8_t color_ARGB[4];
+    uint32_t color;
+};
+    
+int main(){
+    union PixelColor pixel;
+    pixel.color_ARGB[0]=0x0F;//a direct register load on an 8bit system
+    pixel.color_ARGB[1]=0xBC;
+    pixel.color_ARGB[2]=0xFF;
+    pixel.color_ARGB[3]=0xCB;
+    draw(pixelColor.color);//a direct pass of a 32bit number instead of a pointer to an array
+}
+##### Example compiler defined
 
+union PixelColor{
+    uint32_t color;
+    struct __attribute__((__packed__)) byte{
+        uint8_t A;
+        uint8_t R;
+        uint8_t G;
+        uint8_t B;
+    }
+}
+int main(){
+    union PixelColor pixel;
+    pixel.byte.A=0x0F;
+    pixel.byte.R=0xBC;
+    pixel.byte.G=0xFF;
+    pixel.byte.B=0xCB;
+    draw(pixelColor.color);
+}
+
+##### Example , Bad
+int main(){
+    union { // anonymous union
+        uint32_t x;
+        float y;
+        uint8_t* z;
+    } data;
+    data.x=1;
+    cout<< data.y; //the union is not related
+}
 ##### Enforcement
 
-???
+hard, warn when a different union member is accessed then the one previous written to.
 
 ### <a name="Ru-anonymous"></a>C.182: Use anonymous `union`s to implement tagged unions
 
